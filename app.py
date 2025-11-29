@@ -1,4 +1,4 @@
-# app.py - AI Research Chatbot with Registration & Chat History
+# app.py - AI Research Chatbot with PostgreSQL support
 from fastapi import FastAPI, Request, Form, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,9 +11,9 @@ from database import (
     add_chat_message, get_chat_history, add_uploaded_pdf, get_user_pdfs
 )
 from paper_search import search_papers_from_pdf
-from utils import save_uploaded_file
-from ingest import ingest_pdf
-from llm_agent import answer_with_context, extract_citations_from_response
+from ingest import ingest_pdf_to_text
+from retrieval import retrieve_from_pdf_texts
+from llm_agent import answer_with_context
 
 load_dotenv()
 
@@ -640,16 +640,16 @@ async def upload_pdfs(request: Request, files: list[UploadFile] = File(...)):
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     for file in files:
-        path = save_uploaded_file(file)
-        chunks, pages, summary, pdf_name = ingest_pdf(path)
+        # Process PDF and extract text
+        pdf_text, pages, summary, pdf_name = ingest_pdf_to_text(file)
         
-        # Store in database
+        # Store in database (text stored in DB, no file storage needed!)
         add_uploaded_pdf(
             user_id=user['id'],
             filename=pdf_name,
-            file_path=path,
+            pdf_text=pdf_text,
             pages=pages,
-            chunks=chunks,
+            chunks=len(pdf_text.split('\n\n')),  # Rough chunk estimate
             summary=summary
         )
     
@@ -668,9 +668,8 @@ async def chat_message(request: Request, message: str = Form(...)):
         response_text = "Please upload at least one PDF document before asking questions."
         citations = ""
     else:
-        # Retrieve context from all PDFs
-        from retrieval import retrieve_from_multiple_pdfs
-        chunks = retrieve_from_multiple_pdfs(message, pdfs)
+        # Retrieve context from PDF texts stored in database
+        chunks = retrieve_from_pdf_texts(message, pdfs)
         
         # Get answer from LLM
         response_text = answer_with_context(message, chunks)
