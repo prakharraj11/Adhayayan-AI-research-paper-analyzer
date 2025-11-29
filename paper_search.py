@@ -38,34 +38,27 @@ def generate_related_papers_with_llm(pdf_summaries: list, user_response: str) ->
     # Combine PDF summaries
     combined_summary = "\n".join([f"- {pdf['summary']}" for pdf in pdf_summaries[:3]])
     
-    prompt = f"""You are an academic research assistant. Based on the following research papers and discussion, suggest 5 highly relevant academic papers that would be valuable for further reading.
+    prompt = f"""You are an academic research assistant. Based on the following research papers, suggest 5 highly relevant academic papers.
 
 UPLOADED PAPERS SUMMARY:
 {combined_summary}
 
-RECENT DISCUSSION CONTEXT:
-{user_response[:500]}
+Generate 5 related papers in this EXACT format (use bullet points with •):
 
-Generate 5 related papers in this EXACT format:
+• **[Paper Title 1]** by Author1, Author2 et al. (2023)
+  Research area and brief relevance explanation in one line.
 
-**Related Research Papers:**
-
-1. **[Paper Title]** by Author1, Author2 et al. (Year)
-   - *Field*: [Research area]
-   - *Relevance*: [One sentence explaining why this is relevant]
-   - *Key Finding*: [Main contribution in one sentence]
-
-2. ...
+• **[Paper Title 2]** by Author1, Author2 (2022)
+  Research area and brief relevance explanation in one line.
 
 REQUIREMENTS:
-- Make titles sound realistic and academic
+- Use bullet point (•) for each paper
+- Make titles realistic and academic
 - Years between 2019-2025
-- Include a mix of foundational and recent works
-- Vary venues: arXiv, NeurIPS, ICML, Nature, Science, etc.
-- Focus on papers that complement the uploaded research
-- Keep descriptions concise and specific
+- Keep each description to ONE line only
+- No extra formatting or sections
 
-Generate exactly 5 papers:"""
+Generate exactly 5 papers with bullet points:"""
 
     try:
         response = llm.invoke(prompt)
@@ -78,7 +71,7 @@ def search_papers_from_pdf(pdfs: list, response_text: str) -> str:
     Main function to generate citations section.
     Combines extracted references and LLM-generated related papers.
     """
-    html_output = "<div style='padding: 5px;'>"
+    html_output = ""
     
     # 1. Try to extract references from PDFs (using pdf_text from database)
     all_references = []
@@ -89,16 +82,15 @@ def search_papers_from_pdf(pdfs: list, response_text: str) -> str:
             all_references.extend(refs)
     
     if all_references:
-        html_output += "<h4 style='color: #a78bfa; margin: 0 0 12px 0; font-size: 14px;'>📖 References from Uploaded Papers</h4>"
-        html_output += "<ul style='margin: 0 0 20px 0; padding: 0; list-style: none;'>"
-        for ref in all_references[:5]:  # Show max 5 references
-            html_output += f"<li style='margin: 0 0 8px 0; padding: 10px 12px; background: rgba(30, 30, 45, 0.4); border-radius: 8px; border-left: 3px solid rgba(167, 139, 250, 0.3); color: #d1d5db; font-size: 13px; line-height: 1.6;'>{ref}</li>"
+        html_output += "<p style='color: #a78bfa; font-weight: 600; margin: 0 0 10px 0;'>📚 References from Paper:</p>"
+        html_output += "<ul style='margin: 0 0 15px 0; padding-left: 20px;'>"
+        for i, ref in enumerate(all_references[:5], 1):  # Show max 5 references
+            html_output += f"<li style='margin: 5px 0; color: #d1d5db;'>{ref}</li>"
         html_output += "</ul>"
     
     # 2. Generate related papers using LLM
+    html_output += "<p style='color: #a78bfa; font-weight: 600; margin: 15px 0 10px 0;'>🔬 Related Research Papers:</p>"
     related_papers = generate_related_papers_with_llm(pdfs, response_text)
-    
-    html_output += f"<div style='color: #d1d5db; line-height: 1.8; font-size: 13px;'>{related_papers}</div>"
-    html_output += "</div>"
+    html_output += f"<div style='color: #d1d5db; line-height: 1.8;'>{related_papers}</div>"
     
     return html_output
