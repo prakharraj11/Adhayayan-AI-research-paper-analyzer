@@ -75,7 +75,7 @@ def get_login_html():
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AI Research Chatbot - Login</title>
+    <title>अध्ययन - Research AI</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
@@ -126,8 +126,8 @@ def get_login_html():
 </head>
 <body>
     <div class="login-box">
-        <h1>🔬 Research AI</h1>
-        <p>Analyze research papers with AI-powered insights</p>
+        <h1>🔬 अध्ययन</h1>
+        <p>AI-Powered Research Paper Analyzer</p>
         <a href="/login" class="login-btn">Continue with Google</a>
     </div>
 </body>
@@ -231,6 +231,20 @@ def get_registration_html(google_email, google_name):
 """
 
 def get_chat_html(user, chat_history, pdfs):
+    # Generate document-level citations section
+    doc_citations_html = ""
+    if pdfs:
+        doc_citations_html = "<div class='doc-citations'><h3>📚 Document References & Related Papers</h3>"
+        for pdf in pdfs:
+            summary = pdf.get('summary', 'No summary available')[:200]
+            doc_citations_html += f"""
+            <div class='doc-citation-item'>
+                <h4>📄 {pdf['filename']}</h4>
+                <p><strong>Pages:</strong> {pdf['pages']} | <strong>Summary:</strong> {summary}...</p>
+            </div>
+            """
+        doc_citations_html += "</div>"
+    
     messages_html = ""
     for msg in chat_history:
         role = msg['role']
@@ -250,7 +264,7 @@ def get_chat_html(user, chat_history, pdfs):
                 <div class="avatar">🤖</div>
                 <div class="text">
                     {content}
-                    {f'<details class="citations"><summary>📚 View Citations & Related Papers</summary><div class="citation-content">{citations}</div></details>' if citations else ''}
+                    {f'<details class="citations"><summary>📑 View Related Research Papers</summary><div class="citation-content">{citations}</div></details>' if citations else ''}
                 </div>
             </div>
             """
@@ -426,23 +440,88 @@ def get_chat_html(user, chat_history, pdfs):
         }}
         .citations {{
             margin-top: 15px;
-            padding: 12px;
-            background: rgba(20, 20, 30, 0.8);
-            border-radius: 10px;
-            border-left: 3px solid #a78bfa;
+            padding: 15px;
+            background: rgba(20, 20, 30, 0.9);
+            border-radius: 12px;
+            border-left: 4px solid #a78bfa;
         }}
         .citations summary {{
             cursor: pointer;
             color: #a78bfa;
             font-weight: 600;
             font-size: 14px;
-            margin-bottom: 10px;
+            padding: 5px 0;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        .citations summary::-webkit-details-marker {{ display: none; }}
+        .citations summary::before {{
+            content: '▶';
+            font-size: 12px;
+            transition: transform 0.2s;
+        }}
+        .citations[open] summary::before {{
+            transform: rotate(90deg);
         }}
         .citation-content {{
             color: #d1d5db;
             font-size: 13px;
-            line-height: 1.8;
-            margin-top: 10px;
+            line-height: 1.9;
+            margin-top: 12px;
+            padding-left: 5px;
+        }}
+        .citation-content h4 {{
+            color: #a78bfa;
+            font-size: 14px;
+            margin: 15px 0 10px 0;
+            font-weight: 600;
+        }}
+        .citation-content ul {{
+            list-style: none;
+            padding-left: 0;
+        }}
+        .citation-content li {{
+            padding: 8px 12px;
+            margin: 6px 0;
+            background: rgba(30, 30, 45, 0.4);
+            border-radius: 8px;
+            border-left: 3px solid rgba(167, 139, 250, 0.3);
+        }}
+        .doc-citations {{
+            background: rgba(30, 30, 45, 0.6);
+            border: 1px solid rgba(100, 100, 150, 0.2);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }}
+        .doc-citations h3 {{
+            color: #a78bfa;
+            font-size: 16px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        .doc-citation-item {{
+            background: rgba(20, 20, 30, 0.5);
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            border-left: 3px solid #7c3aed;
+        }}
+        .doc-citation-item h4 {{
+            color: #c4b5fd;
+            font-size: 14px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }}
+        .doc-citation-item p {{
+            color: #9ca3af;
+            font-size: 12px;
+            line-height: 1.6;
+            margin: 0;
         }}
         .input-area {{
             border-top: 1px solid rgba(100, 100, 150, 0.15);
@@ -491,7 +570,8 @@ def get_chat_html(user, chat_history, pdfs):
 <body>
     <div class="sidebar">
         <div class="sidebar-header">
-            <h1>🔬 Research AI</h1>
+            <h1>🔬 अध्ययन</h1>
+            <p style="font-size: 11px; color: #6b7280; margin-top: 5px;">Research AI</p>
         </div>
         <div class="user-info">
             <div class="user-avatar">{user['name'][0].upper()}</div>
@@ -512,6 +592,7 @@ def get_chat_html(user, chat_history, pdfs):
     </div>
     <div class="main-content">
         <div class="chat-area" id="chatArea">
+            {doc_citations_html}
             {messages_html if messages_html else '<div style="text-align: center; color: #6b7280; margin-top: 100px; font-size: 16px;">👋 Upload a PDF and start asking questions!</div>'}
         </div>
         <div class="input-area">
