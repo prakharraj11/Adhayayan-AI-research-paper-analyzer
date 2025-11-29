@@ -1,30 +1,42 @@
-# retrieval.py - Retrieve relevant chunks from multiple PDFs
-import os
-from pypdf import PdfReader
+# retrieval.py - Retrieve from PDF texts stored in database
+from typing import List, Dict
 
-def extract_text_from_pdf(pdf_path: str) -> list:
+def extract_chunks_from_text(pdf_text: str, filename: str) -> List[Dict]:
     """
-    Extract text from PDF and return as list of page chunks.
+    Split PDF text into chunks by pages.
     """
-    try:
-        reader = PdfReader(pdf_path)
-        chunks = []
+    chunks = []
+    
+    # Split by page markers
+    pages = pdf_text.split("--- Page ")
+    
+    for page_text in pages:
+        if not page_text.strip():
+            continue
         
-        for i, page in enumerate(reader.pages):
-            text = page.extract_text() or ""
-            if text.strip():
-                chunks.append({
-                    "text": text,
-                    "page": i + 1,
-                    "source": os.path.basename(pdf_path)
-                })
+        # Extract page number
+        try:
+            page_num_end = page_text.find(" ---")
+            if page_num_end > 0:
+                page_num = page_text[:page_num_end].strip()
+                text = page_text[page_num_end + 4:].strip()
+            else:
+                page_num = "1"
+                text = page_text.strip()
+        except:
+            page_num = "?"
+            text = page_text.strip()
         
-        return chunks
-    except Exception as e:
-        print(f"Error reading PDF {pdf_path}: {e}")
-        return []
+        if text:
+            chunks.append({
+                "text": text,
+                "page": page_num,
+                "source": filename
+            })
+    
+    return chunks
 
-def simple_keyword_search(query: str, chunks: list, top_k: int = 5) -> list:
+def simple_keyword_search(query: str, chunks: List[Dict], top_k: int = 5) -> List[Dict]:
     """
     Simple keyword-based search to find relevant chunks.
     """
@@ -51,13 +63,13 @@ def simple_keyword_search(query: str, chunks: list, top_k: int = 5) -> list:
     scored_chunks.sort(reverse=True, key=lambda x: x[0])
     return [chunk for _, chunk in scored_chunks[:top_k]]
 
-def retrieve_from_multiple_pdfs(query: str, pdfs: list, top_k: int = 6) -> list:
+def retrieve_from_pdf_texts(query: str, pdfs: List[Dict], top_k: int = 6) -> List[Dict]:
     """
-    Retrieve relevant chunks from multiple PDFs.
+    Retrieve relevant chunks from multiple PDFs stored in database.
     
     Args:
         query: User's question
-        pdfs: List of PDF metadata from database (contains file_path)
+        pdfs: List of PDF records from database (contains pdf_text field)
         top_k: Number of chunks to return
     
     Returns:
@@ -65,15 +77,16 @@ def retrieve_from_multiple_pdfs(query: str, pdfs: list, top_k: int = 6) -> list:
     """
     all_chunks = []
     
-    # Extract text from all PDFs
+    # Extract chunks from all PDFs
     for pdf in pdfs:
-        pdf_chunks = extract_text_from_pdf(pdf['file_path'])
-        all_chunks.extend(pdf_chunks)
+        if pdf.get('pdf_text'):
+            chunks = extract_chunks_from_text(pdf['pdf_text'], pdf['filename'])
+            all_chunks.extend(chunks)
     
     if not all_chunks:
         return [{
             "text": "No document content available.",
-            "page": 0,
+            "page": "0",
             "source": "System"
         }]
     
@@ -85,12 +98,3 @@ def retrieve_from_multiple_pdfs(query: str, pdfs: list, top_k: int = 6) -> list:
         relevant_chunks = all_chunks[:top_k]
     
     return relevant_chunks
-
-def get_full_document_context(pdfs: list) -> str:
-    """
-    Get a high-level summary of all uploaded documents for context.
-    """
-    context = "**Uploaded Documents:**\n"
-    for pdf in pdfs:
-        context += f"- {pdf['filename']} ({pdf['pages']} pages): {pdf.get('summary', 'No summary')}\n"
-    return context
