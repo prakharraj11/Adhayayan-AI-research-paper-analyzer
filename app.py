@@ -346,20 +346,21 @@ def get_chat_html(user, chat_history, pdfs):
         .pdf-name {{ flex: 1; color: #d1d5db; }}
         .pdf-pages {{ color: #6b7280; font-size: 11px; }}
         .no-pdfs {{ color: #6b7280; font-size: 13px; text-align: center; padding: 20px 0; }}
-        .upload-btn {{
-            background: linear-gradient(135deg, #7c3aed, #a78bfa);
-            color: white;
+        .upload-label {{
+            cursor: pointer;
             padding: 10px;
             border-radius: 10px;
-            text-align: center;
-            cursor: pointer;
-            font-weight: 600;
+            background: linear-gradient(135deg, #7c3aed, #a78bfa);
+            color: white;
             font-size: 14px;
+            font-weight: 600;
+            text-align: center;
+            display: block;
             margin-bottom: 10px;
             border: none;
-            width: 100%;
         }}
-        .upload-btn:hover {{ opacity: 0.9; }}
+        .upload-label:hover {{ opacity: 0.9; }}
+        input[type="file"] {{ display: none; }}
         .logout-btn {{
             background: rgba(239, 68, 68, 0.2);
             color: #f87171;
@@ -369,6 +370,8 @@ def get_chat_html(user, chat_history, pdfs):
             cursor: pointer;
             font-size: 13px;
             border: 1px solid rgba(239, 68, 68, 0.3);
+            width: 100%;
+            margin-top: 10px;
         }}
         .logout-btn:hover {{ background: rgba(239, 68, 68, 0.3); }}
         .main-content {{
@@ -483,16 +486,6 @@ def get_chat_html(user, chat_history, pdfs):
         .send-btn:hover {{ opacity: 0.9; }}
         .send-btn:disabled {{ opacity: 0.5; cursor: not-allowed; }}
         input[type="file"] {{ display: none; }}
-        .upload-label {{
-            cursor: pointer;
-            padding: 10px;
-            border-radius: 10px;
-            background: rgba(30, 30, 45, 0.5);
-            color: #a78bfa;
-            font-size: 14px;
-            border: 1px dashed rgba(167, 139, 250, 0.5);
-        }}
-        .upload-label:hover {{ background: rgba(30, 30, 45, 0.7); }}
     </style>
 </head>
 <body>
@@ -511,7 +504,7 @@ def get_chat_html(user, chat_history, pdfs):
             <h3>Uploaded Documents</h3>
             {pdfs_html}
         </div>
-        <form action="/upload" method="post" enctype="multipart/form-data">
+        <form action="/upload" method="post" enctype="multipart/form-data" style="margin-bottom: 10px;">
             <input type="file" name="files" id="fileInput" multiple accept=".pdf" onchange="this.form.submit()">
             <label for="fileInput" class="upload-label">📤 Upload PDFs</label>
         </form>
@@ -668,14 +661,19 @@ async def chat_message(request: Request, message: str = Form(...)):
         response_text = "Please upload at least one PDF document before asking questions."
         citations = ""
     else:
-        # Retrieve context from PDF texts stored in database
-        chunks = retrieve_from_pdf_texts(message, pdfs)
-        
-        # Get answer from LLM
-        response_text = answer_with_context(message, chunks)
-        
-        # Extract citations and generate related papers
-        citations = search_papers_from_pdf(pdfs, response_text)
+        try:
+            # Retrieve context from PDF texts stored in database
+            chunks = retrieve_from_pdf_texts(message, pdfs)
+            
+            # Get answer from LLM
+            response_text = answer_with_context(message, chunks)
+            
+            # Extract citations and generate related papers
+            citations = search_papers_from_pdf(pdfs, response_text)
+        except Exception as e:
+            print(f"❌ Error processing chat: {e}")
+            response_text = "I encountered an error while processing your question. Please try again."
+            citations = ""
     
     # Save to chat history
     add_chat_message(user['id'], 'user', message)
