@@ -19,9 +19,12 @@ def answer_with_context(question: str, chunks: list) -> str:
     """
     llm = get_llm()
     
-    # Build context from chunks
+    # Build context from chunks (limit to prevent token overflow)
     context_parts = []
-    for i, chunk in enumerate(chunks[:8], 1):  # Limit to 8 chunks to avoid token limits
+    total_chars = 0
+    max_context_chars = 12000  # Safe limit to avoid token issues
+    
+    for i, chunk in enumerate(chunks[:6], 1):  # Max 6 chunks
         if isinstance(chunk, dict):
             text = chunk.get('text', str(chunk))
             source = chunk.get('source', 'Unknown')
@@ -31,7 +34,18 @@ def answer_with_context(question: str, chunks: list) -> str:
             source = 'Document'
             page = 'N/A'
         
-        context_parts.append(f"[Source {i}: {source}, Page {page}]\n{text}\n")
+        # Truncate text if needed
+        if len(text) > 1500:
+            text = text[:1500] + "..."
+        
+        chunk_text = f"[Source {i}: {source}, Page {page}]\n{text}\n"
+        
+        # Check if adding this chunk would exceed limit
+        if total_chars + len(chunk_text) > max_context_chars:
+            break
+        
+        context_parts.append(chunk_text)
+        total_chars += len(chunk_text)
     
     context_text = "\n".join(context_parts)
     
@@ -55,7 +69,8 @@ ANSWER:"""
         response = llm.invoke(prompt)
         return response.content
     except Exception as e:
-        return f"Error generating response: {str(e)}"
+        print(f"Error generating response: {e}")
+        return f"I apologize, but I encountered an error while processing your question. This might be due to the document size. Try asking a more specific question or upload fewer documents."
 
 def summarize_document(full_text: str) -> str:
     """
