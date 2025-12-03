@@ -8,7 +8,8 @@ import requests
 from dotenv import load_dotenv
 from database import (
     init_db, create_user, get_user_by_email, get_user_by_google_id,
-    add_chat_message, get_chat_history, add_uploaded_pdf, get_user_pdfs
+    add_chat_message, get_chat_history, add_uploaded_pdf, get_user_pdfs,
+    get_pdf_by_id, delete_pdf, clear_chat_history
 )
 from paper_search import search_papers_from_pdf
 from ingest import ingest_pdf_to_text
@@ -263,6 +264,7 @@ def get_chat_html(user, chat_history, pdfs):
                 <span class="pdf-icon">📄</span>
                 <span class="pdf-name">{pdf['filename']}</span>
                 <span class="pdf-pages">{pdf['pages']} pages</span>
+                <button class="pdf-delete" onclick="if(confirm('Delete this PDF?')) window.location.href='/delete-pdf/{pdf['id']}'">×</button>
             </div>
             """
     else:
@@ -341,6 +343,29 @@ def get_chat_html(user, chat_history, pdfs):
             display: flex;
             align-items: center;
             font-size: 13px;
+            position: relative;
+        }}
+        .pdf-item:hover {{
+            background: rgba(30, 30, 45, 0.7);
+        }}
+        .pdf-delete {{
+            position: absolute;
+            right: 8px;
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }}
+        .pdf-item:hover .pdf-delete {{
+            opacity: 1;
+        }}
+        .pdf-delete:hover {{
+            background: rgba(239, 68, 68, 0.4);
         }}
         .pdf-icon {{ margin-right: 8px; }}
         .pdf-name {{ flex: 1; color: #d1d5db; }}
@@ -374,6 +399,19 @@ def get_chat_html(user, chat_history, pdfs):
             margin-top: 10px;
         }}
         .logout-btn:hover {{ background: rgba(239, 68, 68, 0.3); }}
+        .clear-chat-btn {{
+            background: rgba(255, 159, 64, 0.2);
+            color: #fbbf24;
+            padding: 8px;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 13px;
+            border: 1px solid rgba(255, 159, 64, 0.3);
+            width: 100%;
+            margin-top: 8px;
+        }}
+        .clear-chat-btn:hover {{ background: rgba(255, 159, 64, 0.3); }}
         .main-content {{
             flex: 1;
             display: flex;
@@ -509,6 +547,7 @@ def get_chat_html(user, chat_history, pdfs):
             <input type="file" name="files" id="fileInput" multiple accept=".pdf" onchange="this.form.submit()">
             <label for="fileInput" class="upload-label">📤 Upload PDFs</label>
         </form>
+        <button class="clear-chat-btn" onclick="if(confirm('Clear all chat history and documents?')) window.location.href='/clear-chat'">🗑️ Clear Chat</button>
         <button class="logout-btn" onclick="window.location.href='/logout'">Logout</button>
     </div>
     <div class="main-content">
@@ -633,19 +672,33 @@ async def upload_pdfs(request: Request, files: list[UploadFile] = File(...)):
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-    for file in files:
-        # Process PDF and extract text
-        pdf_text, pages, summary, pdf_name = ingest_pdf_to_text(file)
-        
-        # Store in database (text stored in DB, no file storage needed!)
-        add_uploaded_pdf(
-            user_id=user['id'],
-            filename=pdf_name,
-            pdf_text=pdf_text,
-            pages=pages,
-            chunks=len(pdf_text.split('\n\n')),  # Rough chunk estimate
-            summary=summary
+    # Check current PDF count
+    current_pdfs = get_user_pdfs(user['id'])
+    
+    # Limit to 5 total PDFs to avoid token issues
+    if len(current_pdfs) + len(files) > 5:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Maximum 5 PDFs allowed. You have {len(current_pdfs)} PDFs. Please delete some before uploading more."
         )
+    
+    for file in files:
+        try:
+            # Process PDF and extract text
+            pdf_text, pages, summary, pdf_name = ingest_pdf_to_text(file)
+            
+            # Store in database (text stored in DB, no file storage needed!)
+            add_uploaded_pdf(
+                user_id=user['id'],
+                filename=pdf_name,
+                pdf_text=pdf_text,
+                pages=pages,
+                chunks=len(pdf_text.split('\n\n')),  # Rough chunk estimate
+                summary=summary
+            )
+        except Exception as e:
+            print(f"Error uploading {file.filename}: {e}")
+            continue
     
     return RedirectResponse("/chat", status_code=303)
 
@@ -679,6 +732,35 @@ async def chat_message(request: Request, message: str = Form(...)):
     # Save to chat history
     add_chat_message(user['id'], 'user', message)
     add_chat_message(user['id'], 'assistant', response_text, citations)
+    
+    return RedirectResponse("/chat", status_code=303)
+
+@app.get("/delete-pdf/{pdf_id}")
+async def delete_pdf_route(request: Request, pdf_id: int):
+    user = get_session_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Verify PDF belongs to user and delete it
+    pdf = get_pdf_by_id(pdf_id)
+    if pdf and pdf['user_id'] == user['id']:
+        delete_pdf(pdf_id)
+    
+    return RedirectResponse("/chat", status_code=303)
+
+@app.get("/clear-chat")
+async def clear_chat_route(request: Request):
+    user = get_session_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Clear all chat history and PDFs for this user
+    clear_chat_history(user['id'])
+    
+    # Delete all PDFs
+    pdfs = get_user_pdfs(user['id'])
+    for pdf in pdfs:
+        delete_pdf(pdf['id'])
     
     return RedirectResponse("/chat", status_code=303)
 
