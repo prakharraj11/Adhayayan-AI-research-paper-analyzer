@@ -724,6 +724,7 @@ async def chat_message(request: Request, message: str = Form(...)):
             
             # Extract citations and generate related papers
             citations = search_papers_from_pdf(pdfs, response_text)
+            citations = marked.parse(citations);
         except Exception as e:
             print(f"❌ Error processing chat: {e}")
             response_text = "I encountered an error while processing your question. Please try again."
